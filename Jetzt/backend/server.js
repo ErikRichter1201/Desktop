@@ -1,6 +1,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const crypto = require("crypto");
 const {
   CognitoIdentityProviderClient,
   SignUpCommand,
@@ -13,14 +14,25 @@ app.use(cors()); // Erlaubt den Zugriff von localhost:3000 (Frontend)
 
 // AWS Cognito konfigurieren
 const cognitoClient = new CognitoIdentityProviderClient({
-  region: "eu-central-1", // Deine Region
+  region: "eu-central-1", // Deine AWS-Region
 });
 
-const CLIENT_ID = "47efd0bgnod0p9p7n9510oin5g"; // Ersetze durch deinen App Client ID
+const CLIENT_ID = "47efd0bgnod0p9p7n9510oin5g"; // Ersetze durch deine App-Client-ID
+const CLIENT_SECRET = "ntuarvotnieuatvbr452c9cvaiprsk26nmdhqcvf5tm1loi4b3e"; // Ersetze durch dein App-Client-Secret
+
+// Berechnet den Secret-Hash für Cognito
+function calculateSecretHash(username) {
+  return crypto
+    .createHmac("sha256", CLIENT_SECRET)
+    .update(username + CLIENT_ID)
+    .digest("base64");
+}
 
 // Registrierung eines Benutzers
 app.post("/register", async (req, res) => {
   const { username, password, email } = req.body;
+
+  const secretHash = calculateSecretHash(username);
 
   const params = {
     ClientId: CLIENT_ID,
@@ -32,12 +44,15 @@ app.post("/register", async (req, res) => {
         Value: email,
       },
     ],
+    SecretHash: secretHash, // Secret-Hash hinzufügen
   };
 
   try {
     const command = new SignUpCommand(params);
     await cognitoClient.send(command);
-    res.status(200).json({ message: "Benutzer erfolgreich registriert. Überprüfen Sie Ihre E-Mail." });
+    res
+      .status(200)
+      .json({ message: "Benutzer erfolgreich registriert. Überprüfen Sie Ihre E-Mail." });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -47,12 +62,15 @@ app.post("/register", async (req, res) => {
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
+  const secretHash = calculateSecretHash(username);
+
   const params = {
     AuthFlow: "USER_PASSWORD_AUTH",
     ClientId: CLIENT_ID,
     AuthParameters: {
       USERNAME: username,
       PASSWORD: password,
+      SECRET_HASH: secretHash, // Secret-Hash hinzufügen
     },
   };
 
