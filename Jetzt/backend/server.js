@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const {
   CognitoIdentityProviderClient,
   SignUpCommand,
+  ConfirmSignUpCommand,
   InitiateAuthCommand,
 } = require("@aws-sdk/client-cognito-identity-provider");
 
@@ -50,9 +51,32 @@ app.post("/register", async (req, res) => {
   try {
     const command = new SignUpCommand(params);
     await cognitoClient.send(command);
-    res
-      .status(200)
-      .json({ message: "Benutzer erfolgreich registriert. Überprüfen Sie Ihre E-Mail." });
+    res.status(200).json({
+      message:
+        "Benutzer erfolgreich registriert. Überprüfen Sie Ihre E-Mail für den Verifizierungscode.",
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Verifizierung des Codes
+app.post("/verify", async (req, res) => {
+  const { username, code } = req.body;
+
+  const secretHash = calculateSecretHash(username);
+
+  const params = {
+    ClientId: CLIENT_ID,
+    Username: username,
+    ConfirmationCode: code,
+    SecretHash: secretHash,
+  };
+
+  try {
+    const command = new ConfirmSignUpCommand(params);
+    await cognitoClient.send(command);
+    res.status(200).json({ message: "Verifizierung erfolgreich!" });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
